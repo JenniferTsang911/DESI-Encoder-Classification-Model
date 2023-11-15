@@ -1,18 +1,21 @@
 import pandas as pd
 import random
 
-# Load the CSV dataset into a Pandas DataFrame without column names
-df = pd.read_csv('your_dataset.csv', header=None)
+# Load the CSV dataset into a Pandas DataFrame
+df = pd.read_csv('your_file_path.csv', header=None)
 
-# Find unique classes in the first column
-unique_classes = df[0].unique()
+# Ignore the first column of the DataFrame
+df = df.iloc[:, 1:]
+
+# Find unique classes in the second column
+unique_classes = df[1].unique()
 
 # Create a dictionary to store the data frames for each class
 class_dataframes = {}
 
 # Split the data into separate DataFrames based on the unique classes
 for class_name in unique_classes:
-    class_dataframes[class_name] = df[df[0] == class_name]
+    class_dataframes[class_name] = df[df[1] == class_name]
 
 # Find the minimum number of samples among the classes
 min_samples = min(len(class_dataframes[class_name]) for class_name in unique_classes)
