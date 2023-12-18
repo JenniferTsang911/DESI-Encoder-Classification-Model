@@ -76,7 +76,7 @@ class MassSpecDataset(Dataset):
 #
 #             m.bias.data.fill_(0.01)
 class Autoencoder(nn.Module):
-    def __init__(self, input_dim, encoding_dim=50):
+    def __init__(self, input_dim, encoding_dim=250):
         super(Autoencoder, self).__init__()
 
         # Encoder

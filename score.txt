@@ -1,0 +1,1 @@
+Final result: OrderedDict([('batch_size', 512), ('dropout_rate', 0.34461092494388756), ('epochs', 500), ('l2_lambda', 0.001), ('learning_rate', 0.0001), ('optimizer', 'sgd')])

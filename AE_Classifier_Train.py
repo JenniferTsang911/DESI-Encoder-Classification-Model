@@ -16,6 +16,22 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 from itertools import product
 import json
 from sklearn.metrics import f1_score
+from sklearn.decomposition import PCA
+
+def perform_pca(train_data, val_data, n_components):
+    pca = PCA(n_components=n_components)
+
+    # Fit the PCA on the training data and apply the transformation to the training data
+    train_data_pca = pca.fit_transform(train_data.cpu().numpy())
+
+    # Apply the PCA transformation to the validation data
+    val_data_pca = pca.transform(val_data.cpu().numpy())
+
+    # Convert the transformed data back to PyTorch tensors
+    train_data_pca = torch.tensor(train_data_pca, dtype=torch.float32).to(device)
+    val_data_pca = torch.tensor(val_data_pca, dtype=torch.float32).to(device)
+
+    return train_data_pca, val_data_pca
 
 def train_autoencoder(train_data, train_labels, val_data, val_labels, num_epochs_AE=1000, AE_LR=0.001, l2_AE=0.0001, encoding_dim=50):
     # Initialize the autoencoder model
@@ -100,7 +116,7 @@ def train_classifier(train_data, train_labels, val_data, val_labels, num_epochs_
     # train_data = autoencoder.encoder(train_data)
     # val_data = autoencoder.encoder(val_data)
     #
-    # print(train_data.shape)
+    print(train_data.shape)
 
     train_loader = DataLoader(MassSpecDataset(train_data, train_labels), batch_size=128, shuffle=True)
     val_loader = DataLoader(MassSpecDataset(val_data, val_labels), batch_size=128)
@@ -118,7 +134,7 @@ def train_classifier(train_data, train_labels, val_data, val_labels, num_epochs_
     accuracy_values_classifier = []
     best_val_loss_CL = float('inf')
     epochs_no_improve_CL = 0
-    patience = 50
+    patience = int(num_epochs_CL*0.1)
 
     for epoch in range(num_epochs_CL):
         for batch_data, batch_labels in train_loader:
@@ -161,7 +177,7 @@ def train_classifier(train_data, train_labels, val_data, val_labels, num_epochs_
             break
 
         loss_values_classifier.append(loss.item())
-        #print(f"Classifier Epoch {epoch+1}/{num_epochs_CL} - Loss: {loss.item()} - Val Loss: {val_loss_CL} - Accuracy: {accuracy}")
+        print(f"Classifier Epoch {epoch+1}/{num_epochs_CL} - Loss: {loss.item()} - Val Loss: {val_loss_CL} - Accuracy: {accuracy}")
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -277,211 +293,96 @@ def evaluate_model(autoencoder, model, test_loader):
     print("Recall:", recall_score(all_labels, all_predictions, average='weighted'))
     print("F1 Score:", f1_score(all_labels, all_predictions, average='weighted'))
 
-def random_search_CNN(original_train_data, train_labels, original_val_data, val_labels, iterations=500):
-    best_mean_f1 = 0
-    best_autoencoder_params = None
-    best_classifier_params = None
-
-    # Create a DataLoader for the validation data
-    val_loader = DataLoader(MassSpecDataset(original_val_data, val_labels), batch_size=64)
-
-    for i in range(iterations):
-        train_data = original_train_data.clone()
-        val_data = original_val_data.clone()
-
-        # Generate random hyperparameters for the autoencoder
-        num_epochs_AE = random.randint(500, 1500)
-        AE_LR = random.uniform(0.0001, 0.01)
-        l2_AE = random.uniform(0.0001, 0.01)
-
-        print(f'Autoencoder: {num_epochs_AE}, {AE_LR}, {l2_AE}')
-        # Train the autoencoder with the generated hyperparameters
-        autoencoder, train_data, val_data, _, _ = train_autoencoder(train_data, train_labels, val_data, val_labels, num_epochs_AE, AE_LR, l2_AE)
-
-        # Generate random hyperparameters for the classifier
-        num_epochs_CL = random.randint(100, 500)
-        CL_LR = random.uniform(0.0001, 0.01)
-        dropoutCL = random.uniform(0.3, 0.7)
-        momentumCL = random.uniform(0.1, 0.9)
-        l2_CL = random.uniform(0.0001, 0.01)
-
-        print(f'Classifier: {num_epochs_CL}, {CL_LR}, {dropoutCL}, {momentumCL}, {l2_CL}')
-        # Train the classifier with the generated hyperparameters
-        model, _, _ = train_classifier(train_data, train_labels, val_data, val_labels, num_epochs_CL, CL_LR, 64, dropoutCL, momentumCL, l2_CL)
-
-        # Initialize an empty list to store the predicted labels
-        all_predicted = []
-
-        # Use the trained model to predict the validation labels
-        with torch.no_grad():
-            for batch_data, _ in val_loader:
-                # Pass the validation data through the autoencoder
-                encoded_data = autoencoder.encoder(batch_data)
-                #print(encoded_data.shape)
-                encoded_data = encoded_data.view(encoded_data.size(0), 1, -1)
-                outputs = model(encoded_data)
-                _, predicted = torch.max(outputs.data, 1)
-                all_predicted.append(predicted.cpu().numpy())
-
-        # Convert the list of predicted labels to a numpy array
-        all_predicted = np.concatenate(all_predicted)
-
-        # Calculate the mean F1 score
-        mean_f1 = f1_score(val_labels.cpu(), all_predicted, average='macro')
-
-        # If this is the best mean F1 score we've seen, update the best parameters
-        if mean_f1 > best_mean_f1:
-            best_mean_f1 = mean_f1
-            best_autoencoder_params = {'num_epochs_AE': num_epochs_AE, 'AE_LR': AE_LR, 'l2_AE': l2_AE}
-            best_classifier_params = {'num_epochs_CL': num_epochs_CL, 'CL_LR': CL_LR, 'dropoutCL': dropoutCL,
-                                      'momentumCL': momentumCL, 'l2_CL': l2_CL}
-
-            # Write the best parameters and their corresponding score to a .txt file
-            with open('best_params_random.txt', 'w') as f:
-                f.write(json.dumps({'autoencoder': best_autoencoder_params, 'classifier': best_classifier_params,
-                                    'score': best_mean_f1}))
-
-        # Print progress
-        print(f"Iteration {i + 1}/{iterations} - Best Mean F1: {best_mean_f1}")
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
-    return best_autoencoder_params, best_classifier_params
-
-def random_search(original_train_data, train_labels, original_val_data, val_labels, iterations=250):
-    best_mean_f1 = 0
-    best_autoencoder_params = None
-    best_classifier_params = None
-
-    # Create a DataLoader for the validation data
-    val_loader = DataLoader(MassSpecDataset(original_val_data, val_labels), batch_size=128)
-
-    encoding_dim = [50, 75, 100, 125, 150, 175, 200, 225, 250]
-
-    for item in encoding_dim:
-        for i in range(iterations):
-            train_data = original_train_data.clone()
-            val_data = original_val_data.clone()
-
-            # Generate random hyperparameters for the autoencoder
-            num_epochs_AE = 1000
-            AE_LR = random.uniform(0.0001, 0.01)
-            l2_AE = random.uniform(0.0001, 0.01)
-
-            print(f'Autoencoder: {num_epochs_AE}, {AE_LR}, {l2_AE}, {item}')
-            # Train the autoencoder with the generated hyperparameters
-            autoencoder, train_data, val_data, _, _ = train_autoencoder(train_data, train_labels, val_data, val_labels, num_epochs_AE, AE_LR, l2_AE, item)
-
-            # Generate random hyperparameters for the classifier
-            num_epochs_CL = 500
-            CL_LR = random.uniform(0.0001, 0.01)
-            dropoutCL = random.uniform(0.3, 0.7)
-            momentumCL = random.uniform(0.1, 0.9)
-            l2_CL = random.uniform(0.0001, 0.01)
-
-            print(f'Classifier: {num_epochs_CL}, {CL_LR}, {dropoutCL}, {momentumCL}, {l2_CL}')
-            # Train the classifier with the generated hyperparameters
-            model, _, _, _ = train_classifier(train_data, train_labels, val_data, val_labels, num_epochs_CL, CL_LR, dropoutCL, momentumCL, l2_CL)
-
-            # Initialize an empty list to store the predicted labels
-            all_predicted = []
-
-            # Use the trained model to predict the validation labels
-            with torch.no_grad():
-                for batch_data, _ in val_loader:
-                    # Pass the validation data through the autoencoder
-                    encoded_data = autoencoder.encoder(batch_data)
-                    #print(encoded_data.shape)
-                    #encoded_data = encoded_data.view(encoded_data.size(0), 1, -1)
-                    outputs = model(encoded_data)
-                    _, predicted = torch.max(outputs.data, 1)
-                    all_predicted.append(predicted.cpu().numpy())
-
-            # Convert the list of predicted labels to a numpy array
-            all_predicted = np.concatenate(all_predicted)
-
-            # Calculate the mean F1 score
-            mean_f1 = f1_score(val_labels.cpu(), all_predicted, average='macro')
-
-            # If this is the best mean F1 score we've seen, update the best parameters
-            if mean_f1 > best_mean_f1:
-                best_mean_f1 = mean_f1
-                best_autoencoder_params = {'num_epochs_AE': num_epochs_AE, 'AE_LR': AE_LR, 'l2_AE': l2_AE}
-                best_classifier_params = {'num_epochs_CL': num_epochs_CL, 'CL_LR': CL_LR, 'dropoutCL': dropoutCL,
-                                          'momentumCL': momentumCL, 'l2_CL': l2_CL}
-
-                # Write the best parameters and their corresponding score to a .txt file
-                with open('best_params_random.txt', 'w') as f:
-                    f.write(json.dumps({'autoencoder': best_autoencoder_params, 'classifier': best_classifier_params,
-                                        'score': best_mean_f1}))
-
-            # Print progress
-            print(f"Iteration {i + 1}/{iterations} - Best Mean F1: {best_mean_f1}")
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-
-    return best_autoencoder_params, best_classifier_params
 def main():
     num_epochs_AE = 1000
     AE_LR = 0.008
     l2_AE = 0.0006
 
-    num_epochs_CL = 500
+    num_epochs_CL = 1000
     batch_size = 64
-    CL_LR = 0.008
-    dropoutCL = 0.64
-    momentumCL = 0.64
-    l2_CL = 0.00012
+    CL_LR = 0.001
+    dropoutCL = 0.5
+    momentumCL = 0.99
+    l2_CL = 0.0001
 
     train_data, train_labels, val_data, val_labels, test_data, test_labels = process_data(r"C:\Users\jenni\Documents\GitHub\DESI-project\all_aligned_no_background_others_preprocessed.csv", balanced=True)
 
-    best_autoencoder_params, best_classifier_params = random_search(train_data, train_labels, val_data, val_labels)
+    #train_data, val_data = perform_pca(train_data, val_data, 1000)
 
-    print(best_autoencoder_params, best_classifier_params)
-
-    #autoencoder, train_data, val_data, loss_values_autoencoder, val_loss_values_autoencoder = train_autoencoder(train_data, train_labels, val_data, val_labels, num_epochs_AE, AE_LR, l2_AE)
+    autoencoder, train_data, val_data, loss_values_autoencoder, val_loss_values_autoencoder = train_autoencoder(train_data, train_labels, val_data, val_labels, num_epochs_AE, AE_LR, l2_AE)
 
     #model, loss_values_classifier, val_loss_values_classifier = train_CNN(train_data, train_labels, val_data, val_labels, num_epochs_CL, CL_LR, batch_size, dropoutCL, momentumCL, l2_CL)
-    #model, loss_values_classifier, val_loss_values_classifier, accuracy_values_classifier = train_classifier(train_data, train_labels, val_data, val_labels, num_epochs_CL, CL_LR, dropoutCL, momentumCL, l2_CL)
+    model, loss_values_classifier, val_loss_values_classifier, accuracy_values_classifier = train_classifier(train_data, train_labels, val_data, val_labels, num_epochs_CL, CL_LR, dropoutCL, momentumCL, l2_CL)
+
+    # pca = PCA(n_components=1000)
+    # test_data_pca = pca.fit_transform(test_data.cpu().numpy())
+    # test_data_pca = pca.transform(test_data.cpu().numpy())
+
+    # test_data_pca = torch.tensor(test_data_pca, dtype=torch.float32).to(device)
+    # test_loader = DataLoader(MassSpecDataset(test_data_pca, test_labels), batch_size=128)
+
+    # all_predicted = []
+    #
+    # # Use the trained model to predict the test labels
+    # with torch.no_grad():
+    #     for batch_data, _ in test_loader:
+    #         outputs = model(batch_data)
+    #         _, predicted = torch.max(outputs.data, 1)
+    #         all_predicted.append(predicted.cpu().numpy())
+    #
+    # # Convert the list of predicted labels to a numpy array
+    # all_predicted = np.concatenate(all_predicted)
+    #
+    # # Calculate the F1 score
+    # f1 = f1_score(test_labels.cpu(), all_predicted, average='macro')
+    # print(f"F1 Score: {f1}")
+    #
+    # # Calculate the confusion matrix
+    # cm = confusion_matrix(test_labels.cpu(), all_predicted)
+    #
+    # # Display the confusion matrix
+    # disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+    # disp.plot(cmap=plt.cm.Blues)
+    # plt.show()
 
     #Create a DataLoader for the test data
-    #test_loader = DataLoader(MassSpecDataset(test_data, test_labels), batch_size=64)
+    test_loader = DataLoader(MassSpecDataset(test_data, test_labels), batch_size=64)
 
-    #evaluate_model(autoencoder,model, test_loader)
+    evaluate_model(autoencoder,model, test_loader)
 
-    # #Create a figure and a set of subplots
-    # fig, axs = plt.subplots(1, 2, figsize=(15, 5))  # Adjust the figsize as needed
-    #
-    # # Plot the training and validation loss curves for the autoencoder
-    # axs[0].plot(loss_values_autoencoder, label='Training Loss - Autoencoder')
-    # axs[0].plot(val_loss_values_autoencoder, label='Validation Loss - Autoencoder')
-    # axs[0].set_title('Loss curves for the Autoencoder')
-    # axs[0].set_xlabel('Epoch')
-    # axs[0].set_ylabel('Loss')
-    # axs[0].legend()
-    #
-    # # Plot the training and validation loss curves for the classifier
-    # axs[1].plot(loss_values_classifier, label='Training Loss - Classifier')
-    # axs[1].plot(val_loss_values_classifier, label='Validation Loss - Classifier')
-    # axs[1].set_title('Loss curves for the Classifier')
-    # axs[1].set_xlabel('Epoch')
-    # axs[1].set_ylabel('Loss')
-    # axs[1].legend()
-    #
-    # # Display the figure
-    # plt.tight_layout()
-    # plt.show()
-    #
-    # plt.figure()
-    # plt.plot(accuracy_values_classifier, label='accuracy')
-    #
-    # plt.xlabel('Epoch')
-    # plt.ylabel('Accuracy')
-    # plt.title('Accuracy Curve')
-    #
-    # plt.legend()
-    #
-    # plt.show()
+    #Create a figure and a set of subplots
+    fig, axs = plt.subplots(1, 2, figsize=(15, 5))  # Adjust the figsize as needed
+
+    # Plot the training and validation loss curves for the autoencoder
+    axs[0].plot(loss_values_autoencoder, label='Training Loss - Autoencoder')
+    axs[0].plot(val_loss_values_autoencoder, label='Validation Loss - Autoencoder')
+    axs[0].set_title('Loss curves for the Autoencoder')
+    axs[0].set_xlabel('Epoch')
+    axs[0].set_ylabel('Loss')
+    axs[0].legend()
+
+    # Plot the training and validation loss curves for the classifier
+    axs[1].plot(loss_values_classifier, label='Training Loss - Classifier')
+    axs[1].plot(val_loss_values_classifier, label='Validation Loss - Classifier')
+    axs[1].set_title('Loss curves for the Classifier')
+    axs[1].set_xlabel('Epoch')
+    axs[1].set_ylabel('Loss')
+    axs[1].legend()
+
+    # Display the figure
+    plt.tight_layout()
+    plt.show()
+
+    plt.figure()
+    plt.plot(accuracy_values_classifier, label='accuracy')
+
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.title('Accuracy Curve')
+
+    plt.legend()
+
+    plt.show()
 
 main()
 '''
