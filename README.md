@@ -10,10 +10,8 @@ This repository contains the code for an autoencoder-based classification model 
 - [Installation](#installation)
 - [Usage](#usage)
 - [Dataset](#dataset)
-- [Model Architecture](#model-architecture)
 - [Results](#results)
 - [Contributing](#contributing)
-- [License](#license)
 
 ## Introduction
 
@@ -21,18 +19,21 @@ As a student project, this repository serves as an implementation of an autoenco
 
 ## Installation
 
-To run the code in this repository, follow these steps:
+To run the code in this repository, you'll need to install the following dependencies:
 
-1. Clone this repository:
-    ```bash
-    git clone https://github.com/your-username/desi-mass-spectrometry-autoencoder.git
-    ```
+- [TensorFlow](https://www.tensorflow.org/)
+- [Keras](https://keras.io/)
+- [scikit-learn](https://scikit-learn.org/)
+- [NumPy](https://numpy.org/)
+- [Pandas](https://pandas.pydata.org/)
+- [Seaborn](https://seaborn.pydata.org/)
+- [Matplotlib](https://matplotlib.org/)
 
-2. Install the required dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
+You can install these packages using pip:
 
+```bash
+pip install tensorflow keras scikit-learn numpy pandas seaborn matplotlib
+```
 ## Usage
 
 1. Preprocess the DESI Mass Spectrometry data according to your requirements.
@@ -69,12 +70,14 @@ Please note that the DESI Mass Spectrometry dataset used in this project is not 
 
 ## Results
 
-The performance metrics and evaluation results of the trained model are documented in the `results/` directory. This includes accuracy, precision, recall, F1-score, and any other relevant metrics.
+Here are some visualizations of the results obtained from the model:
+
+![Result 1](images/result1.png)
+*Figure 1: Autoencoder and classification training with labeled data. Here we achieved an F1 score of 0.77 and an accuracy of 0.85*
+
+![Result 2](images/result2.png)
+*Figure 2: Autoencoder and classification training without labeled data. Here we achieved an F1 score of 0.72 an accuracy of 0.77*
 
 ## Contributing
 
 Contributions to this project are welcome. If you have any suggestions, improvements, or bug fixes, feel free to open an issue or create a pull request.
-
-## License
-
-This project is licensed under the [MIT License](LICENSE).
