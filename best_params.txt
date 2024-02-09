@@ -1,2 +1,0 @@
-Best parameters: {'learning_rate': 0.0001, 'l2_lambda': 0.01, 'dropout_rate': 0.1}
-Best score: 0.9635515545312616
