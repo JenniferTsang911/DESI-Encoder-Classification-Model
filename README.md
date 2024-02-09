@@ -73,9 +73,11 @@ Please note that the DESI Mass Spectrometry dataset used in this project is not 
 Here are some visualizations of the results obtained from the model:
 
 ![Result 1](images/result1.png)
+
 *Figure 1: Autoencoder and classification training with labeled data. Here we achieved an F1 score of 0.77 and an accuracy of 0.85*
 
 ![Result 2](images/result2.png)
+
 *Figure 2: Autoencoder and classification training without labeled data. Here we achieved an F1 score of 0.72 an accuracy of 0.77*
 
 ## Contributing
