@@ -1,4 +1,4 @@
-from AE_ClassifierV2_model import *
+from AE_ClassifierV2 import *
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.metrics import f1_score
 from tensorflow.keras.callbacks import ProgbarLogger, TensorBoard, LearningRateScheduler
